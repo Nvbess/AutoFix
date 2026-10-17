@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dashboard AutoFix</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--tx:#1f2937;--mu:#6b7280;--g:#2e9d5b;--y:#e6b422;--r:#d64541;--b:#2f6db5;--gr:#9aa5b1}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx)}
+header{padding:16px 20px;background:#1f3a5f;color:#fff;display:flex;flex-wrap:wrap;gap:8px;justify-content:space-between;align-items:center}
+header h1{font-size:18px;margin:0}header small{opacity:.8}
+nav{display:flex;gap:6px;padding:12px 20px;flex-wrap:wrap}nav button{border:1px solid #c9d1db;background:#fff;padding:7px 14px;border-radius:6px;cursor:pointer;font-weight:600}
+nav button.on{background:#1f3a5f;color:#fff;border-color:#1f3a5f}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:14px;padding:0 20px 20px}
+.c{background:var(--card);border-radius:10px;padding:14px;box-shadow:0 1px 3px #0001}.c h2{font-size:14px;margin:0 0 10px}
+.k{display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid #eef1f5;font-size:14px}.k:last-child{border:0}
+.d{width:14px;height:14px;border-radius:50%;flex:none}.k b{margin-left:auto}
+.hide{display:none}canvas{max-height:260px}
+table{width:100%;border-collapse:collapse;font-size:13px}td,th{padding:6px;border-bottom:1px solid #eef1f5;text-align:left}
+</style></head><body>
+<header><h1>Dashboard AutoFix · Monitoreo y Control</h1><small id="corte"></small></header>
+<nav><button data-v="eje" class="on">Ejecutiva (Gerencia)</button><button data-v="ope">Operativa (Equipo)</button><button data-v="ado">Adopción (Jefa de taller)</button></nav>
+<main>
+ <div class="c v eje"><h2>Semáforo de KPIs</h2><div id="sem"></div></div>
+ <div class="c v eje"><h2>Curva S · % avance acumulado</h2><canvas id="cS"></canvas></div>
+ <div class="c v eje"><h2 id="tPres">Presupuesto (MM CLP)</h2><canvas id="cP"></canvas></div>
+ <div class="c v eje"><h2>Estado de hitos</h2><table id="hit"></table></div>
+ <div class="c v ope hide"><h2>Uso de recursos · horas plan vs. real</h2><canvas id="cR"></canvas></div>
+ <div class="c v ope hide"><h2>Bugs críticos/altos por módulo (meta ≤ 5)</h2><canvas id="cB"></canvas></div>
+ <div class="c v ope hide"><h2>Velocidad por sprint (% SP, meta ≥ 85%)</h2><canvas id="cV"></canvas></div>
+ <div class="c v ado hide"><h2>Satisfacción piloto por módulo (meta ≥ 4)</h2><canvas id="cA"></canvas></div>
+ <div class="c v ado hide"><h2>Capacitación y adopción</h2><div id="adop"></div></div>
+</main>
+<script>
+/* ===== EDITA SOLO ESTOS DATOS ===== */
+const D={
+ corte:"16/10/2026",
+ kpis:[["Avance del proyecto",88,"%",95,85,1],["Cumplimiento de hitos",100,"%",90,80,1],["Presupuesto (CR/CP)",97,"%",100,105,0],["Velocidad del equipo",86,"%",85,70,1],["Defectos por módulo (máx.)",4,"",5,8,0],["Satisfacción piloto",4.3,"/5",4,3.5,1],["Checklist regulatorio",72,"%",100,80,1]],
+ // [nombre, valor, unidad, umbral verde, umbral rojo, 1=mayor es mejor / 0=menor es mejor]
+ avancePlan:[7,13,20,27,33,40,47,53,60,67,73,80,87,93,100], avanceReal:[7,13,19,26,32,39,46,48,54,60,66],
+ presupuesto:{cat:["Desarrollo","Hosting/BD","Capacitación","Contingencia"],plan:[15,1,3,1],real:[13.9,0.6,0.2,0]},
+ hitos:[["H1 Acta y requerimientos","18/08","18/08"],["H2 Agendamiento","29/08","31/08"],["H3 Órdenes de trabajo","08/09","10/09"],["H4 Historial","15/09","16/09"],["H5 Reportería","22/09","24/09"],["H6 QA y regulatorio","27/10",""],["H7 Capacitación","10/11",""],["H8 Despliegue MVP","17/11",""]],
+ recursos:{p:["Gonzalo (GP)","Julio (Full Stack)","Camilo (QA)"],plan:[110,330,150],real:[104,352,121]},
+ bugs:{m:["Agendamiento","Órdenes","Historial","Reportería"],v:[3,4,2,4]},
+ velocidad:{s:["S1","S2","S3","S4","S5"],v:[90,84,88,86,83]},
+ satisf:[4.4,4.2,4.5,4.1], capacitacion:0, adopcion:null
+};
+/* ================================== */
+const C=v=>getComputedStyle(document.documentElement).getPropertyValue(v).trim(),G=C('--g'),Y=C('--y'),R=C('--r'),B=C('--b'),GR=C('--gr');
+const col=(v,g,r,up)=>up?(v>=g?G:v>=r?Y:R):(v<=g?G:v<=r?Y:R);
+document.getElementById('corte').textContent="Corte: "+D.corte;
+document.getElementById('sem').innerHTML=D.kpis.map(([n,v,u,g,r,up])=>`<div class="k"><span class="d" style="background:${col(v,g,r,up)}"></span>${n}<b>${String(v).replace('.',',')}${u}</b></div>`).join('');
+const ds=(l,d,c)=>({label:l,data:d,backgroundColor:c,borderColor:c});
+new Chart(cS,{type:'line',data:{labels:D.avancePlan.map((_,i)=>'S'+(i+1)),datasets:[{...ds('Planificado',D.avancePlan,GR),borderDash:[5,4]},ds('Real',D.avanceReal,B)]},options:{scales:{y:{max:100}}}});
+const P=D.presupuesto,tot=P.real.reduce((a,b)=>a+b,0);tPres.textContent=`Presupuesto (MM CLP) · ejecutado $${tot.toFixed(1)}M de $${P.plan.reduce((a,b)=>a+b,0)}M`;
+new Chart(cP,{type:'bar',data:{labels:P.cat,datasets:[ds('Presupuestado',P.plan,GR),ds('Ejecutado',P.real,B)]}});
+const dd=s=>{const[a,b]=s.split('/');return new Date(2026,b-1,a)};
+hit.innerHTML='<tr><th>Hito</th><th>Plan</th><th>Real</th><th></th></tr>'+D.hitos.map(([h,p,r])=>{let c=GR;if(r){const x=(dd(r)-dd(p))/864e5;c=x<=0?G:x<=3?Y:R}return`<tr><td>${h}</td><td>${p}</td><td>${r||'—'}</td><td><span class="d" style="display:inline-block;background:${c}"></span></td></tr>`}).join('');
+const Rr=D.recursos;new Chart(cR,{type:'bar',data:{labels:Rr.p,datasets:[ds('Horas plan',Rr.plan,GR),{...ds('Horas reales',Rr.real,B),backgroundColor:Rr.real.map((v,i)=>col(v/Rr.plan[i]*100,100,110,0))}]},options:{indexAxis:'y'}});
+new Chart(cB,{type:'bar',data:{labels:D.bugs.m,datasets:[{...ds('Bugs',D.bugs.v,G),backgroundColor:D.bugs.v.map(v=>col(v,5,8,0))}]},options:{plugins:{legend:{display:false}},scales:{y:{max:10}}}});
+new Chart(cV,{type:'bar',data:{labels:D.velocidad.s,datasets:[{...ds('% SP',D.velocidad.v,G),backgroundColor:D.velocidad.v.map(v=>col(v,85,70,1))}]},options:{plugins:{legend:{display:false}},scales:{y:{max:100}}}});
+new Chart(cA,{type:'bar',data:{labels:D.bugs.m,datasets:[{...ds('Encuesta',D.satisf,G),backgroundColor:D.satisf.map(v=>col(v,4,3.5,1))}]},options:{plugins:{legend:{display:false}},scales:{y:{min:0,max:5}}}});
+adop.innerHTML=`<div class="k"><span class="d" style="background:${col(D.capacitacion,100,50,1)}"></span>Personal capacitado<b>${D.capacitacion}%</b></div><div class="k"><span class="d" style="background:${D.adopcion==null?GR:col(D.adopcion,50,30,1)}"></span>Reservas online (meta ≥ 50%)<b>${D.adopcion==null?'post-despliegue':D.adopcion+'%'}</b></div>`;
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>{document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x===b));document.querySelectorAll('.v').forEach(c=>c.classList.toggle('hide',!c.classList.contains(b.dataset.v)))});
+</script></body></html>
